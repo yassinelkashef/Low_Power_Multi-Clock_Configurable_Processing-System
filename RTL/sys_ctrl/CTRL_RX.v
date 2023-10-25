@@ -1,0 +1,312 @@
+module SYS_CTRL_rx
+(
+input wire CLK,
+input wire RST,
+input wire [7:0] RX_P_DATA,
+input wire RX_D_VLD,
+output reg EN,
+output reg [3:0] ALU_FUN,
+output reg CLK_EN, 
+output reg [3:0] Address,
+output reg WrEn,
+output reg RdEn,
+output reg [7:0] WrData
+);
+
+localparam  [3:0]      IDLE           = 4'b0000,
+                       WAIT_ADD       = 4'b0001,      
+					   WAIT_ADD1      = 4'b0011,
+					   WAIT_DATA      = 4'b0010,
+					   WAIT_OPA       = 4'b0110,
+					   WAIT_OPB       = 4'b0100,
+					   WAIT_FUN       = 4'b0101,
+					   WAIT_FUN1      = 4'b0111,
+					   STING_Rd       = 4'b1111,
+					   STING_Wr       = 4'b1110,
+					   STING_ALUop    = 4'b1100,
+					   STING_ALUno    = 4'b1101;
+					     
+reg         [3:0]          next_state,current_state;				   
+ 
+reg   [3:0]    Reg_FUN , Reg_Address ;
+
+always@(posedge CLK , negedge RST)
+begin 
+if(!RST)
+   begin 
+	      current_state <= IDLE ;
+		end
+	else 
+	   begin 
+	      current_state <= next_state ;
+	    end 
+end
+
+always@(*)
+begin 
+   case(current_state)
+     
+	IDLE :    begin
+			      if (RX_D_VLD && RX_P_DATA == 'hAA )
+				  begin
+				     next_state = WAIT_ADD ;
+				  end
+				  else if (RX_D_VLD && RX_P_DATA == 'hBB )
+				  begin
+				     next_state = WAIT_ADD1 ;
+				  end
+				  else if (RX_D_VLD && RX_P_DATA == 'hCC)
+				   begin
+				     next_state = WAIT_OPA ;
+				   end
+				   else if (RX_D_VLD && RX_P_DATA == 'hDD)
+				   begin
+				     next_state = WAIT_FUN ;
+				   end
+				   else 
+				   next_state = IDLE ;
+			  end	
+		  
+    WAIT_ADD: begin
+	              if (RX_D_VLD)
+				  begin
+				     next_state = WAIT_DATA ;
+				  end
+				  else 
+				  begin
+				     next_state = WAIT_ADD ;
+				  end
+			  end
+	WAIT_DATA: begin 
+	             if (RX_D_VLD)
+				 begin 
+				     next_state = STING_Wr ;
+				 end
+				 else
+				 begin
+				     next_state = WAIT_DATA;
+				 end 
+			   end
+    WAIT_ADD1: begin 
+	             if (RX_D_VLD)
+				 begin 
+				     next_state = STING_Rd;
+				 end
+				 else
+				 begin
+				     next_state = WAIT_ADD1 ;
+   				 end
+			   end
+	
+	WAIT_OPA: begin
+	             if (RX_D_VLD)
+				 begin 
+				     next_state = WAIT_OPB ;
+				 end
+				 else
+				 begin 
+				     next_state = WAIT_OPA ;
+                 end
+			  end
+    WAIT_OPB: begin 
+                 if (RX_D_VLD)
+                 begin
+                     next_state = WAIT_FUN ;
+                 end
+                 else 
+                 begin 
+                     next_state = WAIT_OPB ;
+                 end
+			  end
+    WAIT_FUN: begin
+                 if(RX_D_VLD)
+                 begin
+                     next_state = STING_ALUop ; 
+                 end
+                 else
+                 begin 
+                     next_state = WAIT_FUN ;
+                 end
+			   end
+	WAIT_FUN1: begin
+                 if(RX_D_VLD)
+                 begin
+                     next_state = STING_ALUno ; 
+                 end
+                 else
+                 begin 
+                     next_state = WAIT_FUN ;
+                 end
+               end
+  STING_Rd   : begin
+                   next_state = IDLE;
+               end			
+               
+	STING_Wr   :  begin
+                   next_state = IDLE;
+               end		
+  STING_ALUop : begin
+                   next_state = IDLE;
+               end		
+  STING_ALUno 	: begin
+                   next_state = IDLE;
+               end		
+   default      :  begin
+                   next_state = IDLE;
+                   end
+    endcase
+end	
+	
+always@ (posedge CLK)
+begin 
+case (current_state)
+   WAIT_ADD : begin 
+         if (RX_D_VLD) 
+            Reg_Address <= RX_P_DATA;	
+			  end
+	WAIT_FUN  : begin
+	       if (RX_D_VLD) 
+	          Reg_FUN <= RX_P_DATA;
+	            end
+	WAIT_FUN1  : begin 
+	        if (RX_D_VLD)
+	           Reg_FUN <= RX_P_DATA;
+	           end
+	            
+endcase
+end
+// output logic
+
+
+always @ (*)
+ begin
+	CLK_EN     = 1'b1 ;
+    WrEn       = 0 ;
+    Address    = 0 ;
+    WrData     = 0 ;
+    RdEn       = 0 ;
+	ALU_FUN    = 0 ;
+	EN         = 0 ;
+  case(current_state)
+  //if (rx_p_data=='hxAA)
+    IDLE       : begin
+	             CLK_EN     = 1'b1 ;
+                 WrEn       = 0 ;
+                 Address    = 0 ;
+                 WrData     = 0 ;
+                 RdEn       = 0 ;
+                 ALU_FUN    = 0 ;
+                 EN         = 0 ;
+				 end
+    WAIT_ADD   : begin
+                CLK_EN     = 1'b0 ;
+                WrEn       = 1'b0 ;
+                Address    = RX_P_DATA ;
+                WrData     = 0 ;
+                RdEn       = 1'b0 ; 
+				ALU_FUN    = 0 ;
+	            EN         = 0 ;
+			   
+				end
+	WAIT_DATA : begin
+	            CLK_EN     = 1'b0 ;
+                WrEn       = 1'b0 ;
+                Address    = Reg_Address;
+                WrData     = 0;
+                RdEn       = 1'b0 ; 
+			         	ALU_FUN    = 0 ;
+	              EN         = 0 ;
+			   
+				end
+ //if (rx_p_data=='hxBB)
+    WAIT_ADD1 : begin 
+	            CLK_EN     = 1'b0;
+                WrEn       = 1'b0 ;
+                Address    = 0 ;
+                WrData     = 0; 
+                RdEn       = 1'b0 ; 
+			          	ALU_FUN    = 0 ;
+	               EN         = 0 ;
+				end
+ //if (rx_p_data=='hxCC)
+	WAIT_OPA :  begin 
+	            CLK_EN     = 1'b0 ;
+                WrEn       = 1'b1 ;
+                Address    = 0 ;
+                WrData     = RX_P_DATA ; 
+                RdEn       = 1'b0 ;
+                ALU_FUN    = 0 ;
+            	EN         = 0 ;				
+				end
+    WAIT_OPB : begin
+	            CLK_EN     = 1'b0 ;
+                WrEn       = 1'b1 ;
+                Address    = 1 ;
+                WrData     = RX_P_DATA;
+                RdEn       = 1'b0 ;
+                ALU_FUN    = 0 ;
+	            EN         = 0 ;				
+				end
+	WAIT_FUN : begin
+	            CLK_EN     = 1'b1 ;
+                WrEn       = 1'b0 ;
+                Address    = 0 ;
+                WrData     = 0;
+                RdEn       = 1'b0 ; 
+				        ALU_FUN    = 0 ;
+	              EN         = 1'b0 ;
+				end
+ //if (rx_p_data=='hxDD)
+    WAIT_FUN1 : begin 
+	            CLK_EN     = 1'b1 ;
+                WrEn       = 1'b0 ;
+                Address    = 0 ;
+                WrData     = 0;
+                RdEn       = 1'b0 ; 
+			         	ALU_FUN    = 0 ;
+	              EN         = 1'b0 ;
+				         end
+				       
+			STING_Rd :   begin
+			          CLK_EN     = 1'b0;
+                WrEn       = 1'b0 ;
+                Address    = RX_P_DATA ;
+                WrData     = 0; 
+                RdEn       = 1'b1 ; 
+			         	ALU_FUN    = 0 ;
+	              EN         = 0 ;
+	            end	 
+	                   
+	   STING_Wr   :  begin
+	             CLK_EN     = 1'b0 ;
+                WrEn       = 1'b1 ;
+                Address    = Reg_Address;
+                WrData     = RX_P_DATA;
+                RdEn       = 1'b0 ; 
+			         	ALU_FUN    = 0 ;
+	              EN         = 0 ;
+			   
+                   
+               end		
+     STING_ALUop : begin
+                   CLK_EN     = 1'b1 ;
+                WrEn       = 1'b0 ;
+                Address    = 0 ;
+                WrData     = 0;
+                RdEn       = 1'b0 ; 
+				        ALU_FUN    = Reg_FUN ;
+	              EN         = 1'b1 ;
+                 
+               end		
+      STING_ALUno 	: begin
+               CLK_EN     = 1'b1 ;
+                WrEn       = 1'b0 ;
+                Address    = 0 ;
+                WrData     = 0;
+                RdEn       = 1'b0 ; 
+			         	ALU_FUN    = Reg_FUN ;
+	              EN         = 1'b1 ;
+               end		      
+	endcase
+end	
+endmodule

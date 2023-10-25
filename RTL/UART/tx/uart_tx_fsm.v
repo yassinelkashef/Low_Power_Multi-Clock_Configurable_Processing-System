@@ -1,0 +1,116 @@
+module fsm_tx (
+input wire clk,
+input wire rest,
+input wire d_valid,
+input wire par_en,
+input wire ser_dn ,
+output reg [4:0]mux_sel,
+output reg ser_en,
+output reg busy
+);
+
+localparam [2:0] idle = 3'b000 ,
+                 start= 3'b001 ,
+				 data = 3'b011 ,
+			  par_bit = 3'b010 ,
+				 stop = 3'b110 ;
+				 
+reg  [2:0] next_state , current_state ;
+
+//satate transition
+always@(posedge clk , negedge rest)
+begin
+   if(!rest)
+       begin 
+	      current_state <= idle ;
+		end
+	else 
+	   begin 
+	      current_state <= next_state ;
+	    end 
+end
+
+
+//next_state_logic
+
+always@(*)
+begin 
+  case (current_state)
+     idle : begin 
+	         if (d_valid)
+	         next_state = start ;
+	          else
+			  next_state = idle;
+			 end
+	 start : begin 
+	            
+			     next_state = data ;
+				
+			 end
+	 data  : begin 
+	           if (ser_dn && par_en)
+                 next_state = par_bit ;
+			   else if (ser_dn && !par_en)
+			      next_state = stop ;
+			   else
+                 next_state = data ;
+			 end
+    par_bit: begin 
+               next_state= stop ;
+              end			   
+			   
+	 stop   : begin
+               next_state = idle;
+            end	
+     default : begin 
+               	next_state = idle;
+               end	   
+	 endcase
+end
+	 
+
+				 
+			
+			
+			
+//output_logic			
+always@(*)
+begin 
+   case (current_state)
+      idle : begin
+	        busy = 1'b0 ;
+			mux_sel = idle ;
+			if (d_valid)
+			  ser_en = 1'b1;
+			 else
+			  ser_en = 1'b0;
+			  end
+	  start : begin 
+            busy = 1'b1 ;
+            mux_sel = start ;
+            ser_en = 1'b1 ;
+			  end
+       data : begin 
+             busy = 1'b1 ;
+             mux_sel = data ;
+        	 ser_en = 1'b1 ;
+			   end
+	   par_bit : begin 
+              busy = 1'b1 ;
+              mux_sel = par_bit ;
+              ser_en = 1'b0 ;
+                 end
+       stop : begin 
+              busy = 1'b1 ;
+              mux_sel = stop ;
+              ser_en = 	1'b0 ;	  
+         			 end
+      default : begin 
+                 busy = 1'b0 ;
+            mux_sel = idle ;
+            ser_en = 1'b0 ;
+                end
+					 endcase 
+					 
+end
+endmodule

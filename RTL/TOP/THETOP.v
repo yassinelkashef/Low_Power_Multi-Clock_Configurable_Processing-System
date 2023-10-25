@@ -1,0 +1,207 @@
+module SYS_TOP 
+(
+input     wire               REF_CLK,
+input     wire               RST,
+input     wire               UART_CLK,
+input     wire               RX_IN,
+output    wire               TX_OUT
+ );
+ 
+//INTERNAL SIGNALS
+
+wire					               UART_TX_CLK; 
+
+                 
+wire                                   SYNC_UART_RST;
+wire                                   SYNC_RF_RST;
+
+
+wire      [7:0]                        Operand_A,
+                                       Operand_B,
+									   UART_Config,
+									   DIV_RATIO;
+									   
+
+
+wire      [7:0]                        UART_RX_OUT;
+wire         						   UART_RX_V_OUT;
+wire      [7:0]			               UART_RX_SYNC;
+wire                                   UART_RX_V_SYNC;
+
+
+wire      [7:0]                        UART_TX_IN;
+wire        		  				   UART_TX_VLD;
+wire      [7:0]                        UART_TX_SYNC;
+wire        						   UART_TX_V_SYNC;
+
+
+wire                                   TX_OUT_Busy;	
+wire                                   UART_TX_Busy_SYNC;
+
+
+wire                                   RF_WrEn;
+wire                                   RF_RdEn;
+wire      [3:0]                        RF_Address;
+wire      [7:0]                        RF_WrData;
+wire      [7:0]                        RF_RdData;
+wire                                   RF_RdData_VLD;
+
+
+wire                                   CLKG_EN;
+wire                                   ALU_EN;
+wire      [3:0]                        ALU_FUN; 
+wire      [7:0]                       ALU_OUT;
+wire                                   ALU_OUT_VLD; 
+									   
+wire                                   ALU_CLK ;								   
+	
+	
+
+///////////////////Reset synchronizers//////////////////
+
+RST_SYNC U0_RST_SYNC(
+.RST(RST),
+.CLK(UART_CLK),
+.SYNC_RST(SYNC_UART_RST)
+);
+
+RST_SYNC U1_RST_SYNC (
+.RST(RST),
+.CLK(REF_CLK),
+.SYNC_RST(SYNC_RF_RST)
+);
+
+
+/////////////////CLOCK GATING//////////////////////////
+
+CLK_GATE U0_CLK_GATE(
+.CLK_EN(CLKG_EN),
+.CLK(REF_CLK),
+.GATED_CLK(ALU_CLK)		
+);
+
+
+////////////////CLOCK DIVIDER//////////////////////////
+
+clock_divider U0_CLK_DIV(
+.clk(UART_CLK),
+.rest(SYNC_UART_RST),
+.divided_ratio(DIV_RATIO),
+.i_clk_en(1'b1),
+.div_clk_out(UART_TX_CLK)	
+);
+
+
+
+///////////////SYNC BIT///////////////////////////////////
+
+BIT_SYNC  U0_bit_sync (
+.dest_clk(REF_CLK),
+.dest_rst(SYNC_RF_RST),
+.unsync_bit(TX_OUT_Busy),
+.sync_bit(UART_TX_Busy_SYNC)
+);
+
+//////////////////DATA SYNC////////////////////////////////
+
+DATA_SYNC U0_ref_sync (
+.CLK(REF_CLK),
+.REST(SYNC_RF_RST),
+.Unsync_bus(UART_RX_OUT),
+.bus_en(UART_RX_V_OUT),
+.Sync_bus(UART_RX_SYNC),
+.enable_pluse(UART_RX_V_SYNC)
+);
+
+DATA_SYNC U1_uart_sync (
+.CLK(UART_TX_CLK),
+.REST(SYNC_UART_RST),
+.Unsync_bus(UART_TX_IN),
+.bus_en(UART_TX_VLD),
+.Sync_bus(UART_TX_SYNC),
+.enable_pluse(UART_TX_V_SYNC)
+);				   
+
+
+/////////////////////ALU////////////////////////////////////
+
+
+ALU U0_ALU (
+.CLK(ALU_CLK),
+.RST(SYNC_RF_RST),  
+.A(Operand_A), 
+.B(Operand_B),
+.EN(ALU_EN),
+.ALU_FUN(ALU_FUN),
+.ALU_OUT(ALU_OUT),
+.OUT_VALID(ALU_OUT_VLD)
+);
+
+
+///////////////////////////REG FILE//////////////////////////
+
+
+RegFile U0_RegFile (
+.CLK(REF_CLK),
+.RST(SYNC_RF_RST),
+.WrEn(RF_WrEn),
+.RdEn(RF_RdEn),
+.Address(RF_Address),
+.WrData(RF_WrData),
+.RdData(RF_RdData),
+.RdData_VLD(RF_RdData_VLD),
+.REG0(Operand_A),
+.REG1(Operand_B),
+.REG2(UART_Config),
+.REG3(DIV_RATIO)
+);
+
+//////////////////////////UART/////////////////////////////////
+
+
+UART_TOP U0_UART_TOP_T
+(
+.RST(SYNC_UART_RST),
+.TX_CLK(UART_TX_CLK),
+.RX_CLK(UART_CLK),
+.RX_IN_S(RX_IN),
+.RX_OUT_P(UART_RX_OUT),
+.RX_OUT_V(UART_RX_V_OUT),
+.TX_IN_P(UART_TX_SYNC),
+.TX_IN_V(UART_TX_V_SYNC),
+.TX_OUT_S(TX_OUT),
+.TX_OUT_Busy(TX_OUT_Busy),
+.Prescale(UART_Config[6:2]),
+.parity_enable(UART_Config[0]),
+.parity_type(UART_Config[1])
+);
+
+
+
+///////////////////////SYSTEM CONTROL///////////////////////////////////
+
+
+SYS_CTRL U0_SYS_CTRL
+(
+.CLK(REF_CLK),
+.RST(SYNC_RF_RST),
+.RX_P_DATA(UART_RX_SYNC),
+.RX_D_VLD(UART_RX_V_SYNC),
+.ALU_OUT(ALU_OUT),
+.OUT_Valid(ALU_OUT_VLD),
+.RdData(RF_RdData),
+.RdData_Valid(RF_RdData_VLD),
+.TX_OUT_Busy(UART_TX_Busy_SYNC),
+.EN(ALU_EN),
+.ALU_FUN(ALU_FUN),
+.CLK_EN(CLKG_EN),
+.Address( RF_Address),
+.WrEn(RF_WrEn),
+.RdEn(RF_RdEn),
+.WrData(RF_WrData),
+.TX_P_DATA(UART_TX_IN),
+.TX_D_VLD(UART_TX_VLD)
+
+);
+endmodule
+

@@ -1,0 +1,57 @@
+module serializer(
+input wire clk,
+input wire rest,
+input wire ser_en,
+input wire [7:0] p_data,
+output reg ser_dn,
+output reg ser_data
+);
+
+reg [7:0] count;
+wire count_max ;
+reg[7:0] SR;  //SHIFT REGISTER
+assign count_max = (count == 5'b1001);
+ 
+always @(posedge clk , negedge rest)
+begin
+  if (!rest)
+    begin
+	 count   <= 5'b0  ;
+	end
+  else if(ser_en&& count ==0)
+	begin
+         SR <= p_data;
+         count <= count + 5'b1 ;
+     end
+	 
+   else if (ser_en && !count_max)
+      begin
+        ser_data <= SR[0]  ;
+	    SR <= { 1'b0 , SR[7:1] };
+	 /* ser_data <= p_data[0];
+	    p_data[0] <= p_data[1];
+		p_data[1] <= p_data[2];
+		p_data[2] <= p_data[3];
+		p_data[3] <= p_data[4];
+		p_data[4] <= p_data[5];
+		p_data[5] <= p_data[6];
+		p_data[6] <= p_data[7];
+		p_data[7] <= 1'b0;
+     */	
+       count <= count + 5'b1 ;
+      end
+	  end
+	  	 
+end
+ always@(*)
+ begin
+ if (count_max)
+	   begin
+	   ser_dn = 1'b1 ;
+	   // if(!ser_en)
+	    // count = 5'b0 ;
+        end
+ else 
+  ser_dn = 1'b0;
+ end
+endmodule
